@@ -23,7 +23,7 @@ const SHEET_GIDS = {
     income: 1941434530,       // Set to gid number when you create Income tab
     savings: 1489417062,      // Set to gid number when you create Savings tab
     flex: 1845212077,         // Set to gid number when you create Flex tab
-    confirmations: null       // Paste GID here after creating a Confirmations tab (columns: key, confirmed_date)
+    confirmations: 1828023200       // Paste GID here after creating a Confirmations tab (columns: key, confirmed_date)
 };
 
 // Helper to build sheet URL (with cache-busting)
