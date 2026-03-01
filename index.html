@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Budget Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💰 Family Budget Tracker</h1>
+            <p class="subtitle">5-Week Financial Overview</p>
+        </header>
+
+        <section class="accounts-section">
+            <h2>Account Balances</h2>
+            <div class="display-holders">
+                <div class="accounts-grid" id="accounts-grid">
+                    <!-- Accounts populated by JS -->
+                </div>
+
+                    <div class="summary-card income">
+                        <h3>Expected Income</h3>
+                        <p class="amount" id="total-income">€0.00</p>
+                        <span class="period">Next 5 weeks</span>
+                    </div>
+                    <div class="summary-card expenses">
+                        <h3>Expected Expenses</h3>
+                        <p class="amount" id="total-expenses">€0.00</p>
+                        <span class="period">Next 5 weeks</span>
+                    </div>
+                    <div class="summary-card balance">
+                        <h3>Projected Balance</h3>
+                        <p class="amount" id="projected-balance">€0.00</p>
+                        <span class="period">End of 5 weeks</span>
+                    </div>
+                    <div class="summary-card savings">
+                        <h3>Savings</h3>
+                        <p class="amount" id="total-savings">€0.00</p>
+                        <span class="period">Ally Savings</span>
+                    </div>
+            </div>
+        </section>
+
+        <section class="calendar-section">
+            <div class="calendar-header-row">
+                <h2>5-Week Expense Calendar</h2>
+                <div class="calendar-nav">
+                    <button id="prev-week" class="nav-btn" title="Previous week">&larr; Prev</button>
+                    <button id="today-btn" class="nav-btn today-btn" title="Go to today">Today</button>
+                    <button id="next-week" class="nav-btn" title="Next week">Next &rarr;</button>
+                </div>
+            </div>
+            <p class="calendar-range" id="calendar-range"></p>
+            <div class="calendar-container" id="calendar-container">
+                <!-- Calendar populated by JS -->
+            </div>
+            <div class="balance-chart-container">
+                <canvas id="balance-chart"></canvas>
+            </div>
+        </section>
+
+        <section class="expenses-section">
+            <h2>Recurring Expenses</h2>
+            <div class="expense-categories">
+                <div class="category">
+                    <h3>Monthly Bills</h3>
+                    <ul id="monthly-expenses">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+                <div class="category">
+                    <h3>Weekly Expenses</h3>
+                    <ul id="weekly-expenses">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+                <div class="category">
+                    <h3>Flex Expenses</h3>
+                    <ul id="flex-expenses">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+                <div class="category">
+                    <h3>Yearly Bills</h3>
+                    <ul id="yearly-expenses">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Last updated: <span id="last-updated"></span></p>
+            <p class="sheets-link">📊 <a href="#" id="sheets-link">Edit in Google Sheets</a></p>
+        </footer>
+    </div>
+
+    <script src="budget-data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
