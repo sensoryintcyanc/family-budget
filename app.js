@@ -22,8 +22,8 @@ function loadPaidItems() {
         const stored = localStorage.getItem('budgetTracker_paidItems');
         if (stored) {
             paidItems = JSON.parse(stored);
-            // Clean up old entries (older than 60 days)
-            const cutoff = Date.now() - (60 * 24 * 60 * 60 * 1000);
+            // Clean up old entries (older than 14 days)
+            const cutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
             Object.keys(paidItems).forEach(key => {
                 if (paidItems[key].timestamp < cutoff) {
                     delete paidItems[key];
@@ -45,6 +45,31 @@ function savePaidItems() {
         localStorage.setItem('budgetTracker_paidItems', JSON.stringify(paidItems));
     } catch (e) {
         console.warn('Could not save paid items to localStorage:', e);
+    }
+}
+
+/**
+ * Fetch confirmations from the Google Sheets Confirmations tab and merge into paidItems.
+ * Tab columns: key, confirmed_date
+ * Add a row per confirmed item, e.g.: expense_Rent_2026-02-01 | 2026-03-01
+ */
+async function fetchConfirmations() {
+    const url = getSheetUrl(SHEET_GIDS.confirmations);
+    if (!url) return;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) return;
+        const csvText = await response.text();
+        const rows = parseCSV(csvText);
+        rows.forEach(row => {
+            const key = (row.key || '').trim();
+            if (key && !paidItems[key]) {
+                paidItems[key] = { timestamp: Date.now(), source: 'sheets' };
+            }
+        });
+        savePaidItems();
+    } catch (e) {
+        console.warn('Could not fetch confirmations from Google Sheets:', e);
     }
 }
 
@@ -336,8 +361,10 @@ function parseFlexDate(dateStr) {
         const day = parseInt(shortMatch[2]);
         const year = new Date().getFullYear();
         const date = new Date(year, month, day);
-        // If date is in the past, assume next year
-        if (date < new Date()) {
+        // Only advance to next year if more than 14 days in the past (within 14 days = rollover window)
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        if (date < twoWeeksAgo) {
             date.setFullYear(year + 1);
         }
         return date;
@@ -404,6 +431,9 @@ async function loadFromGoogleSheets() {
     liveFlexExpenses = sheetFlex.length > 0 ? sheetFlex : flexExpenses;
 
     dataLoadedFromSheets = sheetAccounts.length > 0;
+
+    // Merge sheet-based confirmations into paidItems
+    await fetchConfirmations();
 
     console.log('Data loaded:', {
         accounts: liveAccounts.length,
@@ -577,6 +607,50 @@ function renderAccounts() {
 }
 
 /**
+ * Return all unconfirmed items from the past 14 days that should roll over to today.
+ * Each entry: { type: 'expense'|'income'|'flex', item, originalDateKey }
+ */
+function getPendingItems() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cutoff = new Date(today);
+    cutoff.setDate(today.getDate() - 14);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    const pending = [];
+
+    getExpenses().forEach(expense => {
+        getExpenseOccurrences(expense, cutoff, yesterday).forEach(occ => {
+            const dateKey = occ.date.toISOString().split('T')[0];
+            if (!isItemPaid('expense', occ.name, dateKey)) {
+                pending.push({ type: 'expense', item: occ, originalDateKey: dateKey });
+            }
+        });
+    });
+
+    getIncome().forEach(incomeItem => {
+        getIncomeOccurrences(incomeItem, cutoff, yesterday).forEach(occ => {
+            const dateKey = occ.date.toISOString().split('T')[0];
+            if (!isItemPaid('income', occ.name, dateKey)) {
+                pending.push({ type: 'income', item: occ, originalDateKey: dateKey });
+            }
+        });
+    });
+
+    getFlexExpenses().forEach(flex => {
+        if (flex.date && flex.date >= cutoff && flex.date < today) {
+            const dateKey = flex.date.toISOString().split('T')[0];
+            if (!isItemPaid('flex', flex.name, dateKey)) {
+                pending.push({ type: 'flex', item: flex, originalDateKey: dateKey });
+            }
+        }
+    });
+
+    return pending;
+}
+
+/**
  * Render the 5-week calendar with running balance
  */
 function renderCalendar() {
@@ -623,6 +697,9 @@ function renderCalendar() {
         isFlex: true
     }));
 
+    // Unconfirmed items from the past 14 days that roll over to today
+    const pendingItems = getPendingItems();
+
     // Build a map of daily transactions for running balance calculation
     // Only include unpaid items in the balance calculation
     const dailyTransactions = new Map();
@@ -668,6 +745,26 @@ function renderCalendar() {
             dailyTransactions.get(dateKey).income += i.amount;
         }
     });
+
+    // Roll pending past items into today's transaction totals so they affect the running balance
+    if (pendingItems.length > 0) {
+        const todayKey = today.toISOString().split('T')[0];
+        if (!dailyTransactions.has(todayKey)) {
+            dailyTransactions.set(todayKey, { income: 0, expenses: 0, flex: 0, flexSavings: 0 });
+        }
+        const todayTrans = dailyTransactions.get(todayKey);
+        pendingItems.forEach(p => {
+            if (p.type === 'expense') todayTrans.expenses += p.item.amount;
+            else if (p.type === 'income') todayTrans.income += p.item.amount;
+            else if (p.type === 'flex') {
+                if (p.item.category && p.item.category.toLowerCase() === 'savings') {
+                    todayTrans.flexSavings += p.item.amount;
+                } else {
+                    todayTrans.flex += p.item.amount;
+                }
+            }
+        });
+    }
 
     // Pre-calculate running balance up to the view start
     let runningBalance = startingBalance;
@@ -718,6 +815,29 @@ function renderCalendar() {
                 isSameDay(f.date, currentDate)
             );
 
+            // Build overdue rollover items for today's cell only
+            let pendingHtml = '';
+            if (isToday && pendingItems.length > 0) {
+                pendingHtml = pendingItems.map(p => {
+                    const originalDate = new Date(p.originalDateKey + 'T00:00:00');
+                    const dueDateStr = originalDate.toLocaleDateString('en-IE', { day: 'numeric', month: 'short' });
+                    if (p.type === 'expense') {
+                        const isPaid = isItemPaid('expense', p.item.name, p.originalDateKey);
+                        return `<div class="expense-item overdue tooltip ${isPaid ? 'paid' : ''}" data-desc="${p.item.category}" title="${p.item.name}: ${formatCurrency(p.item.amount)} — due ${dueDateStr}" onclick="toggleItemPaid('expense', '${p.item.name.replace(/'/g, "\\'")}', '${p.originalDateKey}')">${p.item.name}<span class="tooltiptext">${formatCurrency(p.item.amount)} — due ${dueDateStr}</span></div>`;
+                    } else if (p.type === 'income') {
+                        const isPaid = isItemPaid('income', p.item.name, p.originalDateKey);
+                        return `<div class="expense-item income overdue tooltip ${isPaid ? 'paid' : ''}" title="${p.item.name}: ${formatCurrency(p.item.amount)} — due ${dueDateStr}" onclick="toggleItemPaid('income', '${p.item.name.replace(/'/g, "\\'")}', '${p.originalDateKey}')">+${p.item.name}<span class="tooltiptext">${formatCurrency(p.item.amount)} — due ${dueDateStr}</span></div>`;
+                    } else if (p.type === 'flex') {
+                        const isSavings = p.item.category && p.item.category.toLowerCase() === 'savings';
+                        const flexClass = isSavings ? 'flex-savings' : 'flex';
+                        const prefix = isSavings ? '+' : '';
+                        const isPaid = isItemPaid('flex', p.item.name, p.originalDateKey);
+                        return `<div class="expense-item ${flexClass} overdue tooltip ${isPaid ? 'paid' : ''}" data-desc="${p.item.category}" title="${p.item.name}: ${formatCurrency(p.item.amount)} — due ${dueDateStr}" onclick="toggleItemPaid('flex', '${p.item.name.replace(/'/g, "\\'")}', '${p.originalDateKey}')">${prefix}${p.item.name}<span class="tooltiptext">${formatCurrency(p.item.amount)} — due ${dueDateStr}</span></div>`;
+                    }
+                    return '';
+                }).join('');
+            }
+
             // Calculate day's net change and update running balance
             let dayBalance = null;
             if (!isPast) {
@@ -743,8 +863,9 @@ function renderCalendar() {
             html += `
                 <div class="${classes.join(' ')}">
                     <div class="date ${isToday ? 'today' : ''}">
-                        ${currentDate.getDate()} ${getMonthName(currentDate)}
+                        ${currentDate.getDate()} ${getMonthName(currentDate)}${isToday && pendingItems.length > 0 ? ` <span class="pending-badge" title="${pendingItems.length} item${pendingItems.length === 1 ? '' : 's'} pending confirmation">${pendingItems.length}</span>` : ''}
                     </div>
+                    ${pendingHtml}
                     ${dayIncome.map(i => {
                         const isPaid = isItemPaid('income', i.name, dateKey);
                         return `
@@ -856,6 +977,7 @@ function renderBalanceChart() {
     // Build daily balance data
     const balanceData = [];
     let runningBalance = startingBalance;
+    const pendingItems = getPendingItems();
 
     for (let i = 0; i <= 35; i++) {
         const currentDate = addDays(today, i);
@@ -888,6 +1010,21 @@ function renderBalanceChart() {
                 }
             }
         });
+
+        // On day 0 (today), fold in unconfirmed past items
+        if (i === 0) {
+            pendingItems.forEach(p => {
+                if (p.type === 'expense') dayExpenses += p.item.amount;
+                else if (p.type === 'income') dayIncome += p.item.amount;
+                else if (p.type === 'flex') {
+                    if (p.item.category && p.item.category.toLowerCase() === 'savings') {
+                        dayFlexSavings += p.item.amount;
+                    } else {
+                        dayFlex += p.item.amount;
+                    }
+                }
+            });
+        }
 
         runningBalance += dayIncome + dayFlexSavings - dayExpenses - dayFlex;
 
@@ -1197,6 +1334,20 @@ function calculateSummary() {
 
     // Add flex savings to total income
     totalIncome += totalFlexSavings;
+
+    // Include unconfirmed rollover items from the past 14 days
+    const pendingItems = getPendingItems();
+    pendingItems.forEach(p => {
+        if (p.type === 'expense') totalExpenses += p.item.amount;
+        else if (p.type === 'income') totalIncome += p.item.amount;
+        else if (p.type === 'flex') {
+            if (p.item.category && p.item.category.toLowerCase() === 'savings') {
+                totalIncome += p.item.amount;
+            } else {
+                totalExpenses += p.item.amount;
+            }
+        }
+    });
 
     // Get savings balance from savings tab
     const totalSavings = savingsData.reduce((sum, s) => sum + (s.currentAmount || s.monthlyAmount || 0), 0);

@@ -306,6 +306,37 @@ section h2 {
     background: var(--grocery-color);
 }
 
+/* Overdue / rollover items — unconfirmed past items shown on today */
+.calendar-day .expense-item.overdue {
+    border: 1px dashed var(--warning-color);
+    background-color: rgba(243, 156, 18, 0.1) !important;
+    position: relative;
+}
+
+.calendar-day .expense-item.overdue::before {
+    content: '↩ ';
+    font-size: 9px;
+    color: var(--warning-color);
+    font-weight: bold;
+}
+
+/* Pending count badge on today's date header */
+.pending-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--warning-color);
+    color: white;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-left: 4px;
+    vertical-align: middle;
+    cursor: default;
+}
+
 /* Paid/completed items */
 .calendar-day .expense-item.paid {
     opacity: 0.5;
