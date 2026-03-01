@@ -89,14 +89,30 @@ function isItemPaid(type, name, dateKey) {
 }
 
 /**
+ * Fire-and-forget POST to the Apps Script web app to sync a confirmation to Google Sheets.
+ * Uses no-cors so there's no preflight; failures are silently ignored.
+ */
+function syncConfirmationToSheets(action, key) {
+    if (!CONFIRMATIONS_SCRIPT_URL) return;
+    const date = new Date().toISOString().split('T')[0];
+    fetch(CONFIRMATIONS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ action, key, date })
+    }).catch(() => {});
+}
+
+/**
  * Toggle paid status for an item
  */
 function toggleItemPaid(type, name, dateKey) {
     const key = getItemKey(type, name, dateKey);
     if (paidItems[key]) {
         delete paidItems[key];
+        syncConfirmationToSheets('unconfirm', key);
     } else {
         paidItems[key] = { timestamp: Date.now() };
+        syncConfirmationToSheets('confirm', key);
     }
     savePaidItems();
     renderCalendar();

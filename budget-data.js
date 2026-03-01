@@ -26,6 +26,10 @@ const SHEET_GIDS = {
     confirmations: 1828023200       // Paste GID here after creating a Confirmations tab (columns: key, confirmed_date)
 };
 
+// Google Apps Script web app URL for writing confirmations back to Google Sheets.
+// Setup: Extensions > Apps Script > paste doPost script > Deploy as web app (Anyone access) > copy URL here.
+const CONFIRMATIONS_SCRIPT_URL = null; // e.g. 'https://script.google.com/macros/s/ABC.../exec'
+
 // Helper to build sheet URL (with cache-busting)
 const getSheetUrl = (gid) => gid !== null ? `${SHEETS_BASE_URL}&gid=${gid}&_t=${Date.now()}` : null;
 
