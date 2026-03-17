@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family Budget Tracker</title>
-    <link rel="stylesheet" href="styles.css">
+    <script>
+        // Cache-bust CSS and JS on every load
+        const _v = Date.now();
+        document.write(`<link rel="stylesheet" href="styles.css?v=${_v}">`);
+    </script>
 </head>
 <body>
     <div class="container">
@@ -98,6 +102,6 @@
     </div>
 
     <script src="budget-data.js"></script>
-    <script src="app.js"></script>
+    <script>document.write(`<script src="app.js?v=${_v}"><\/script>`);</script>
 </body>
 </html>

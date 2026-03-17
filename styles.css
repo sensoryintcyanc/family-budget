@@ -385,9 +385,10 @@ section h2 {
 }
 
 .tooltiptext {
-  width: 50%;
+  width: auto;
   bottom: 105%;
-  left: 65%;
+  padding: 0 10px;
+  left: 50%;
   margin-left: -65px; /* Use half of the width (130/2 = 65), to center the tooltip */
 }
 
